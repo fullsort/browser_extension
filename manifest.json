@@ -8,13 +8,11 @@
     },
     "permissions": [
         "tabs",
-        "storage",
-        "cookies"
+        "storage"
     ],
     "host_permissions": [
         "https://www.fullsort.com/",
-        "https://fullsort.com/",
-        "*://*/*"
+        "https://fullsort.com/"
     ],
     "action": {
         "default_title": "Bookmark URL",
