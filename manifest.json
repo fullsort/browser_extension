@@ -1,7 +1,7 @@
 {
     "name": "Full Sort Bookmark Manager",
     "description": "Add a link to your Full Sort account!",
-    "version": "1.2",
+    "version": "1.3",
     "manifest_version": 3,
     "background": {
         "service_worker": "background.js"
