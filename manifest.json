@@ -12,6 +12,7 @@
     ],
     "host_permissions": [
         "https://www.fullsort.com/",
+        "https://app.fullsort.com/",
         "https://fullsort.com/"
     ],
     "action": {

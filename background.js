@@ -33,7 +33,7 @@ function sign_in(user_info) {
     formData.append('email', user_info.email);
     formData.append('password', user_info.pass);
 
-    return fetch('https://fullsort.com/api/auth/login', {
+    return fetch('https://app.fullsort.com/api/auth/login', {
         method: 'POST',
         body: formData,
         headers: {
@@ -70,7 +70,7 @@ function sign_in(user_info) {
 function validate_token(token) {
     return chrome.storage.sync.get('token')
         .then(res => {
-            return fetch('https://fullsort.com/api/auth/check', {
+            return fetch('https://app.fullsort.com/api/auth/check', {
                 method: 'POST',
                 body: {'body' : 'empty'},
                 headers: {
@@ -112,7 +112,7 @@ function get_stored_credentials(key) {
 function get_buckets() {
     return chrome.storage.sync.get('token')
         .then(res => {
-            return fetch('https://fullsort.com/api/buckets', {
+            return fetch('https://app.fullsort.com/api/buckets', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -158,7 +158,7 @@ function bookmark_url(info) {
 
     return chrome.storage.sync.get('token')
         .then(res => {
-            return fetch('https://fullsort.com/api/link', {
+            return fetch('https://app.fullsort.com/api/link', {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -200,7 +200,7 @@ function save_bucket(info) {
 
     return chrome.storage.sync.get('token')
         .then(res => {
-            return fetch('https://fullsort.com/api/bucket', {
+            return fetch('https://app.fullsort.com/api/bucket', {
                 method: 'POST',
                 body: formData,
                 headers: {
