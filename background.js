@@ -80,6 +80,88 @@ function sign_in(user_info) {
 }
 
 /**
+ * Authenticate the user via a third-party provider using Full Sort's
+ * existing web-based OAuth flow (the same Google/Facebook "Connect" options
+ * available on fullsort.com), via the app's named routes:
+ *      GET /redirect/{provider}  (redirect.provider)
+ *      GET /callback/{provider}  (provider.callback)
+ *
+ *      Opens a Chrome-managed web auth flow at the redirect.provider route
+ *      for the given provider, passing along the extension's
+ *      chromiumapp.org redirect URI. Full Sort completes the provider
+ *      handshake on its own servers and, once provider.callback finishes,
+ *      is expected to redirect back to that URI with a `token` query param
+ *      on success. On success, store the token in chrome local storage the
+ *      same way sign_in() does.
+ *
+ *      IMPORTANT - backend dependency: as of this writing,
+ *      Auth\RegisterController@provider_callback only completes a
+ *      session-cookie web login and does not redirect back to an external
+ *      redirect_uri with a token. This extension-side flow cannot complete
+ *      until that controller (in the fullsort.com codebase, not this repo)
+ *      is updated to: (1) thread a `redirect_uri` param from
+ *      redirect.provider through the provider round-trip (e.g. via
+ *      Socialite's state), and (2) when one is present, issue an API token
+ *      (as /api/auth/login does) and redirect to it as
+ *      `{redirect_uri}?token={token}` instead of (or in addition to)
+ *      logging in a web session. Until then, launchWebAuthFlow below will
+ *      never see a matching redirect and this will always resolve 'fail'.
+ *
+ *      Note: unlike email/password sign-in, the resulting user_info has no
+ *      `email`/`pass` fields, so re-auth cannot silently refresh an expired
+ *      social-login session in the background - the user is instead sent
+ *      back to sign-in.html to reconnect, same as any other invalid token.
+ *
+ * @param {String} provider 'google' or 'facebook'
+ * @returns {Promise}
+ */
+function social_sign_in(provider) {
+    if (provider !== 'google' && provider !== 'facebook') {
+        return new Promise(resolve => {
+            resolve('fail');
+        });
+    }
+
+    const redirect_uri = chrome.identity.getRedirectURL();
+    const auth_url = 'https://app.fullsort.com/redirect/' + provider +
+        '?redirect_uri=' + encodeURIComponent(redirect_uri);
+
+    return new Promise(resolve => {
+        chrome.identity.launchWebAuthFlow(
+            { url: auth_url, interactive: true },
+            function(response_url) {
+                if (chrome.runtime.lastError || !response_url) {
+                    resolve('fail');
+                    return;
+                }
+
+                let token;
+                try {
+                    token = new URL(response_url).searchParams.get('token');
+                } catch (err) {
+                    console.log(err);
+                    resolve('fail');
+                    return;
+                }
+
+                if (!token) {
+                    resolve('fail');
+                    return;
+                }
+
+                chrome.storage.local.set({ 'user_info': { provider: provider }, 'token': token }, function () {
+                    if (chrome.runtime.lastError) {
+                        resolve('fail');
+                        return;
+                    }
+                    resolve('success');
+                });
+            }
+        );
+    });
+}
+
+/**
  * Validate the stored token
  *
  * @returns {Promise}
@@ -273,6 +355,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.message === 'login') {
         // Login using provided credentials
         sign_in(request.payload)
+            .then(res => sendResponse(res))
+            .catch(err => { console.log(err); sendResponse('fail'); });
+    } else if (request.message === 'social-login') {
+        // Login using a third-party provider (Google or Facebook)
+        social_sign_in(request.payload && request.payload.provider)
             .then(res => sendResponse(res))
             .catch(err => { console.log(err); sendResponse('fail'); });
     } else if (request.message === 're-auth') {
