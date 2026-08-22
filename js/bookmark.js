@@ -1,8 +1,36 @@
 
+// Sentinel value for the "+ New" option in the bucket dropdown
+const NEW_BUCKET_VALUE = '__new_bucket__';
+
 // Hide the div that displays errors
 const errors = document.querySelector('#errors');
 errors.style.display = "none";
 
+/**
+ * Render an errors object (API validation-error shape) or a success message
+ * into #errors without using innerHTML for any server-controlled content.
+ *
+ * @param {Object} errors_by_field
+ * @returns {undefined}
+ */
+function render_errors(errors_by_field) {
+    const container = document.querySelector('#errors');
+    container.textContent = '';
+
+    const span = document.createElement('span');
+    span.className = 'danger';
+
+    for (var key in errors_by_field) {
+        for (var key1 in errors_by_field[key]) {
+            const line = document.createElement('div');
+            line.textContent = errors_by_field[key][key1];
+            span.appendChild(line);
+        }
+    }
+
+    container.appendChild(span);
+    container.style.display = "block";
+}
 
 /**
  * Send a message to the background.js script to validate the token
@@ -39,7 +67,7 @@ function authenticate() {
 
                         var el = document.createElement("option");
                         el.textContent = '+ New';
-                        el.value = 'asdfasdfasdfasdasdf';
+                        el.value = NEW_BUCKET_VALUE;
                         select.appendChild(el);
 
                     });
@@ -59,19 +87,12 @@ function getTabs() {
     /**
      * Get current browser tab
      */
-    tabs = [];
-    closedTabs = [];
-    bookmarks = [];
 
-    // count and record all the open tabs for all the windows
-    chrome.windows.getAll({populate: true}, function(windows) {
-
-      // set the current tab as the first item in the tab list
-      chrome.tabs.query({currentWindow: true, active: true}, function(tabArray) {
-          let tab_url = tabArray[0].url;
-          document.getElementById("link_name").value = tabArray[0].title;
-          document.getElementById("link_url").innerHTML = tab_url;
-      });
+    // set the current tab as the first item in the tab list
+    chrome.tabs.query({currentWindow: true, active: true}, function(tabArray) {
+        let tab_url = tabArray[0].url;
+        document.getElementById("link_name").value = tabArray[0].title;
+        document.getElementById("link_url").value = tab_url;
     });
 }
 
@@ -86,7 +107,7 @@ getTabs();
 const copy_button = document.querySelector('#copy_bookmark');
 
 copy_button.addEventListener("click", function() {
-  var copyText = document.getElementById('link_url').innerText;
+  var copyText = document.getElementById('link_url').value;
 
   navigator.clipboard.writeText(copyText);
   return true;
@@ -103,35 +124,31 @@ const add_button = document.querySelector('#add_bookmark');
 add_button.addEventListener("click", function() {
     const link_bucket = document.querySelector('#link_bucket').value;
     const link_name = document.querySelector('#link_name').value;
-    const link_url = document.querySelector('#link_url').innerText;
+    const link_url = document.querySelector('#link_url').value;
     const link_description = document.querySelector('#link_description').value;
+
+    add_button.disabled = true;
 
     // send message to background script to save the url
     chrome.runtime.sendMessage({ message: 'bookmark',
         payload: { 'bucket': link_bucket, 'name': link_name, 'url': link_url, 'description': link_description }},
         function (response) {
-            //var errors = JSON.parse(response.errors);
+            add_button.disabled = false;
 
             if (response.errors === undefined) {
-                //document.querySelector('#link_url').style.display = "none";
                 document.querySelector('#display_description').style.display = "none";
                 document.querySelector('#display_bucket').style.display = "none";
                 document.querySelector('#display_name').style.display = "none";
 
-                document.querySelector('#errors').style.display = "block";
-                document.querySelector('#errors').innerHTML = '<h2 class="success">Bookmark Added!</h2>';
+                const container = document.querySelector('#errors');
+                container.textContent = '';
+                const heading = document.createElement('h2');
+                heading.className = 'success';
+                heading.textContent = 'Bookmark Added!';
+                container.appendChild(heading);
+                container.style.display = "block";
             } else {
-                var output = '';
-                var errors = response.errors;
-
-                for(var key in errors) {
-                   for (var key1 in errors[key]) {
-                        output += errors[key][key1] + '<br/>';
-                   }
-                }
-
-                document.querySelector('#errors').style.display = "block";
-                document.querySelector('#errors').innerHTML = '<span class="danger">' + output + '</span>';
+                render_errors(response.errors);
             }
         });
 
@@ -150,7 +167,7 @@ new_bucket.addEventListener("change", function() {
     const link_bucket = document.querySelector('#link_bucket').value;
 
     // check if this is a request for a new bucket
-    if (link_bucket === 'asdfasdfasdfasdasdf') {
+    if (link_bucket === NEW_BUCKET_VALUE) {
         window.location.replace('./bucket.html');
     }
 

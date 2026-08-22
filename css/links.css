@@ -252,3 +252,8 @@ small {
     -webkit-box-shadow: 0 0 0 0.2rem rgba(251, 150, 120, 0.5);
     box-shadow: 0 0 0 0.2rem rgba(251, 150, 120, 0.5)
 }
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
