@@ -131,6 +131,7 @@ function social_sign_in(provider) {
             { url: auth_url, interactive: true },
             function(response_url) {
                 if (chrome.runtime.lastError || !response_url) {
+                    console.log('launchWebAuthFlow failed:', chrome.runtime.lastError && chrome.runtime.lastError.message, 'response_url:', response_url, 'auth_url:', auth_url);
                     resolve('fail');
                     return;
                 }
