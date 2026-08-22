@@ -1,17 +1,27 @@
 
 /**
+ * A generic failure shape matching the API's validation-error format, used
+ * when a request never reaches the server (e.g. offline, DNS failure, bad
+ * JSON body) so callers always get a consistent errors object to render.
+ *
+ * @param {String} message
+ * @returns {Object}
+ */
+function connection_error(message) {
+    return { errors: { general: [message || 'Unable to reach Full Sort. Please check your connection and try again.'] } };
+}
+
+/**
  * Remove data stored in local chrome storage
  *
- * @returns {Boolean}
+ * @returns {Promise}
  */
 function logout() {
-    return chrome.storage.sync.clear()
+    return chrome.storage.local.clear()
         .then(function(data) {
             return data;
         })
         .catch(err => console.log(err));
-
-    return true;
 }
 
 /**
@@ -19,7 +29,7 @@ function logout() {
  *      On success, store credentials and token in chrome local storage
  *
  * @param {type} user_info
- * @returns {unresolved}
+ * @returns {Promise}
  */
 function sign_in(user_info) {
     const formData = new FormData();
@@ -42,33 +52,40 @@ function sign_in(user_info) {
     })
     .then(res => {
         return new Promise(resolve => {
-            if (res.status !== 200) resolve('fail');
+            if (res.status !== 200) {
+                resolve('fail');
+                return;
+            }
 
             res.json()
                 .then(function(data) {
-                    chrome.storage.sync.set({ 'user_info': user_info, 'token': data.token }, function (response) {
-                        if (chrome.runtime.lastError) resolve('fail');
+                    chrome.storage.local.set({ 'user_info': user_info, 'token': data.token }, function (response) {
+                        if (chrome.runtime.lastError) {
+                            resolve('fail');
+                            return;
+                        }
                         resolve('success');
                     });
                 })
                 .catch(function(reason) {
-                    logout();
+                    console.log(reason);
+                    resolve('fail');
                 });
         });
     })
     .catch(function(reason) {
-        logout();
+        console.log(reason);
+        return 'fail';
     });
 }
 
 /**
  * Validate the stored token
  *
- * @param {type} token
- * @returns {unresolved}
+ * @returns {Promise}
  */
-function validate_token(token) {
-    return chrome.storage.sync.get('token')
+function validate_token() {
+    return chrome.storage.local.get('token')
         .then(res => {
             return fetch('https://app.fullsort.com/api/auth/check', {
                 method: 'POST',
@@ -80,22 +97,28 @@ function validate_token(token) {
             })
             .then(res => {
                 return new Promise(resolve => {
-                    if (res.status !== 200) resolve('invalid');
+                    if (res.status !== 200) {
+                        resolve('invalid');
+                        return;
+                    }
 
                     resolve('valid');
                 });
             })
-            .catch(err => console.log(err));
+            .catch(err => {
+                console.log(err);
+                return 'invalid';
+            });
         });
 }
 
 /**
  * Return credentials in chrome local storage
  *
- * @returns {unresolved}
+ * @returns {Promise}
  */
 function get_stored_credentials(key) {
-    return chrome.storage.sync.get(key)
+    return chrome.storage.local.get(key)
         .then(res => {
             return new Promise(resolve => {
                 resolve(res[key]);
@@ -107,10 +130,10 @@ function get_stored_credentials(key) {
 /**
  * Get buckets for authenticated user
  *
- * @returns {unresolved}
+ * @returns {Promise}
  */
 function get_buckets() {
-    return chrome.storage.sync.get('token')
+    return chrome.storage.local.get('token')
         .then(res => {
             return fetch('https://app.fullsort.com/api/buckets', {
                 method: 'GET',
@@ -121,17 +144,25 @@ function get_buckets() {
             })
             .then(res => {
                 return new Promise(resolve => {
-
-                    if (res.status !== 200) resolve({});
+                    if (res.status !== 200) {
+                        resolve([]);
+                        return;
+                    }
 
                     res.json()
                         .then(res => {
                             resolve(res);
                         })
-                        .catch(err => console.log(err));
+                        .catch(err => {
+                            console.log(err);
+                            resolve([]);
+                        });
                 });
             })
-            .catch(err => console.log(err));
+            .catch(err => {
+                console.log(err);
+                return [];
+            });
         });
 }
 
@@ -147,7 +178,7 @@ function bookmark_url(info) {
 
     if (info === undefined || !info.hasOwnProperty('name') || !info.hasOwnProperty('url')) {
         return new Promise(resolve => {
-            resolve('fail');
+            resolve(connection_error('Missing bookmark name or URL.'));
         });
     }
 
@@ -156,7 +187,7 @@ function bookmark_url(info) {
     formData.append('url', info.url);
     formData.append('description', info.description);
 
-    return chrome.storage.sync.get('token')
+    return chrome.storage.local.get('token')
         .then(res => {
             return fetch('https://app.fullsort.com/api/link', {
                 method: 'POST',
@@ -172,10 +203,16 @@ function bookmark_url(info) {
                         .then(res => {
                             resolve(res);
                         })
-                        .catch(err => console.log(err));
+                        .catch(err => {
+                            console.log(err);
+                            resolve(connection_error());
+                        });
                 });
             })
-            .catch(err => console.log(err));
+            .catch(err => {
+                console.log(err);
+                return connection_error();
+            });
         });
 }
 
@@ -191,14 +228,14 @@ function save_bucket(info) {
 
     if (info === undefined || !info.hasOwnProperty('name')) {
         return new Promise(resolve => {
-            resolve('fail');
+            resolve(connection_error('Missing bucket name.'));
         });
     }
 
     formData.append('name', info.name);
     formData.append('description', info.description);
 
-    return chrome.storage.sync.get('token')
+    return chrome.storage.local.get('token')
         .then(res => {
             return fetch('https://app.fullsort.com/api/bucket', {
                 method: 'POST',
@@ -214,10 +251,16 @@ function save_bucket(info) {
                         .then(res => {
                             resolve(res);
                         })
-                        .catch(err => console.log(err));
+                        .catch(err => {
+                            console.log(err);
+                            resolve(connection_error());
+                        });
                 });
             })
-            .catch(err => console.log(err));
+            .catch(err => {
+                console.log(err);
+                return connection_error();
+            });
         });
 }
 
@@ -231,7 +274,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Login using provided credentials
         sign_in(request.payload)
             .then(res => sendResponse(res))
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse('fail'); });
     } else if (request.message === 're-auth') {
         // Validate stored token
         validate_token()
@@ -243,39 +286,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             // Login using stored credentials
                             sign_in(res)
                                 .then(result => sendResponse(result))
-                                .catch(err => console.log(err));
+                                .catch(err => { console.log(err); sendResponse('fail'); });
                         })
-                        .catch(err => console.log(err));
+                        .catch(err => { console.log(err); sendResponse('fail'); });
                 } else {
                     sendResponse('success');
                 }
             })
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse('fail'); });
     } else if (request.message === 'validate') {
         // Validate user token
         validate_token()
             .then(res => sendResponse(res))
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse('invalid'); });
     } else if (request.message === 'logout') {
         // Logout and remove token
         logout()
             .then(res => sendResponse(res))
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse('fail'); });
     } else if (request.message === 'get-buckets') {
         // Get list of available buckets
         get_buckets()
             .then(res => sendResponse(res))
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse([]); });
     } else if (request.message === 'bookmark') {
         // Save bookmark
         bookmark_url(request.payload)
             .then(res => sendResponse(res))
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse(connection_error()); });
     } else if (request.message === 'bucket') {
         // Save bucket
         save_bucket(request.payload)
             .then(res => sendResponse(res))
-            .catch(err => console.log(err));
+            .catch(err => { console.log(err); sendResponse(connection_error()); });
     }
 
     return true;
