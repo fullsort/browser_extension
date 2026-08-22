@@ -80,6 +80,72 @@ function sign_in(user_info) {
 }
 
 /**
+ * Authenticate the user via a third-party provider using Full Sort's
+ * existing web-based OAuth flow (the same Google/Facebook "Connect" options
+ * available on fullsort.com).
+ *
+ *      Opens a Chrome-managed web auth flow pointed at the Full Sort OAuth
+ *      kickoff endpoint for the given provider, passing along the
+ *      extension's chromiumapp.org redirect URI. Full Sort completes the
+ *      provider handshake on its own servers and redirects back to that URI
+ *      with a `token` query param on success. On success, store the token
+ *      in chrome local storage the same way sign_in() does.
+ *
+ *      Note: unlike email/password sign-in, the resulting user_info has no
+ *      `email`/`pass` fields, so re-auth cannot silently refresh an expired
+ *      social-login session in the background - the user is instead sent
+ *      back to sign-in.html to reconnect, same as any other invalid token.
+ *
+ * @param {String} provider 'google' or 'facebook'
+ * @returns {Promise}
+ */
+function social_sign_in(provider) {
+    if (provider !== 'google' && provider !== 'facebook') {
+        return new Promise(resolve => {
+            resolve('fail');
+        });
+    }
+
+    const redirect_uri = chrome.identity.getRedirectURL();
+    const auth_url = 'https://app.fullsort.com/api/auth/' + provider +
+        '/redirect?redirect_uri=' + encodeURIComponent(redirect_uri);
+
+    return new Promise(resolve => {
+        chrome.identity.launchWebAuthFlow(
+            { url: auth_url, interactive: true },
+            function(response_url) {
+                if (chrome.runtime.lastError || !response_url) {
+                    resolve('fail');
+                    return;
+                }
+
+                let token;
+                try {
+                    token = new URL(response_url).searchParams.get('token');
+                } catch (err) {
+                    console.log(err);
+                    resolve('fail');
+                    return;
+                }
+
+                if (!token) {
+                    resolve('fail');
+                    return;
+                }
+
+                chrome.storage.local.set({ 'user_info': { provider: provider }, 'token': token }, function () {
+                    if (chrome.runtime.lastError) {
+                        resolve('fail');
+                        return;
+                    }
+                    resolve('success');
+                });
+            }
+        );
+    });
+}
+
+/**
  * Validate the stored token
  *
  * @returns {Promise}
@@ -273,6 +339,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.message === 'login') {
         // Login using provided credentials
         sign_in(request.payload)
+            .then(res => sendResponse(res))
+            .catch(err => { console.log(err); sendResponse('fail'); });
+    } else if (request.message === 'social-login') {
+        // Login using a third-party provider (Google or Facebook)
+        social_sign_in(request.payload && request.payload.provider)
             .then(res => sendResponse(res))
             .catch(err => { console.log(err); sendResponse('fail'); });
     } else if (request.message === 're-auth') {

@@ -257,3 +257,52 @@ small {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+.btn-social {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 90%;
+    color: #ffffff;
+}
+
+.btn-google {
+    background-color: #DB4437;
+    border-color: #DB4437;
+}
+
+.btn-google:hover {
+    background-color: #C23321;
+    border-color: #C23321;
+}
+
+.btn-facebook {
+    background-color: #4267B2;
+    border-color: #4267B2;
+}
+
+.btn-facebook:hover {
+    background-color: #35528F;
+    border-color: #35528F;
+}
+
+.divider {
+    align-items: center;
+    text-align: center;
+    color: #777777;
+    font-size: 85%;
+}
+
+.divider span {
+    position: relative;
+}
+
+.divider span::before,
+.divider span::after {
+    content: "";
+    display: inline-block;
+    width: 30%;
+    border-bottom: 1px solid #cccccc;
+    margin: 0 0.5rem;
+    vertical-align: middle;
+}

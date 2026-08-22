@@ -8,7 +8,8 @@
     },
     "permissions": [
         "tabs",
-        "storage"
+        "storage",
+        "identity"
     ],
     "host_permissions": [
         "https://app.fullsort.com/"
