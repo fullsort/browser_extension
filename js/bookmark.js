@@ -126,12 +126,13 @@ add_button.addEventListener("click", function() {
     const link_name = document.querySelector('#link_name').value;
     const link_url = document.querySelector('#link_url').value;
     const link_description = document.querySelector('#link_description').value;
+    const link_favorite = document.querySelector('#link_favorite').checked ? 'Y' : 'N';
 
     add_button.disabled = true;
 
     // send message to background script to save the url
     chrome.runtime.sendMessage({ message: 'bookmark',
-        payload: { 'bucket': link_bucket, 'name': link_name, 'url': link_url, 'description': link_description }},
+        payload: { 'bucket': link_bucket, 'name': link_name, 'url': link_url, 'description': link_description, 'is_favorite': link_favorite }},
         function (response) {
             add_button.disabled = false;
 
@@ -139,6 +140,7 @@ add_button.addEventListener("click", function() {
                 document.querySelector('#display_description').style.display = "none";
                 document.querySelector('#display_bucket').style.display = "none";
                 document.querySelector('#display_name').style.display = "none";
+                document.querySelector('#display_favorite').style.display = "none";
 
                 const container = document.querySelector('#errors');
                 container.textContent = '';

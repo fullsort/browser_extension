@@ -269,6 +269,7 @@ function bookmark_url(info) {
     formData.append('name', info.name);
     formData.append('url', info.url);
     formData.append('description', info.description);
+    formData.append('is_favorite', info.is_favorite === 'Y' ? 'Y' : 'N');
 
     return chrome.storage.local.get('token')
         .then(res => {
