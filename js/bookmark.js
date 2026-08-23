@@ -108,7 +108,7 @@ function add_bucket_option(id, name, icon) {
 }
 
 /**
- * Add the non-interactive divider between real buckets and "+ New"
+ * Add the non-interactive divider between "+ New" and the real buckets
  *
  * @returns {undefined}
  */
@@ -321,12 +321,12 @@ function authenticate() {
                 chrome.runtime.sendMessage({ message: 'get-buckets',
                     payload: {}},
                     function (res) {
+                        add_bucket_new_option();
+                        add_bucket_divider();
+
                         for (var i = 0; i < res.length; i++) {
                             add_bucket_option(res[i]['id'], res[i]['name'], res[i]['icon']);
                         }
-
-                        add_bucket_divider();
-                        add_bucket_new_option();
                     });
             }
         });
@@ -403,20 +403,24 @@ function select_search_bucket(bucket) {
     });
 
     if (!option) {
+        // Insert as the first real bucket, i.e. after the "-- Bucket --"
+        // placeholder, "+ New", and the divider - not literally first,
+        // since "+ New" itself stays pinned as the first selectable entry.
         const new_option = document.createElement('option');
         new_option.value = bucket.id;
         new_option.text = bucket.name;
         new_option.dataset.icon = bucket.icon || '';
-        link_bucket_select.insertBefore(new_option, link_bucket_select.firstChild.nextSibling);
 
-        // Keep the dropdown list's row order in sync: insert as the first
-        // real bucket row (ahead of any existing bucket/divider/+New rows,
-        // right after the hidden "no matches" placeholder).
-        const first_row = bucket_select_list.querySelector('.bucket-select-option, .bucket-select-divider');
+        const first_real_option = Array.from(link_bucket_select.options).find(function(opt) {
+            return opt.value !== '' && opt.value !== NEW_BUCKET_VALUE;
+        });
+        link_bucket_select.insertBefore(new_option, first_real_option || null);
+
+        const first_real_row = bucket_select_list.querySelector('.bucket-select-option:not(.bucket-select-new)');
         const new_row = build_bucket_row(bucket.id, bucket.name, bucket.icon);
 
-        if (first_row) {
-            bucket_select_list.insertBefore(new_row, first_row);
+        if (first_real_row) {
+            bucket_select_list.insertBefore(new_row, first_real_row);
         } else {
             bucket_select_list.appendChild(new_row);
         }
