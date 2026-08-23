@@ -10,17 +10,18 @@
 </head>
 
 <body class="m-0 bookmark">
-    <div class="border p-3 m-0">
-        <div class="row">
+    <div class="panel m-0">
+        <div class="panel-header row">
             <div class="column-80">
                 <h1 class="my-1">Bookmark This Page!</h1>
             </div>
             <div class="column-20 text-right">
-                <button id="copy_bookmark" class="p-1" title="Copy to Clipboard"><i class="fa fa-clipboard"></i></button>
-                <button id="logout" class="p-1" title="Logout"><i class="fa fa-sign-out fa-xs"></i></button>
+                <button id="copy_bookmark" class="p-1 icon-btn" title="Copy to Clipboard"><i class="fa fa-clipboard"></i></button>
+                <button id="logout" class="p-1 icon-btn" title="Logout"><i class="fa fa-sign-out fa-xs"></i></button>
             </div>
         </div>
 
+        <div class="panel-body">
         <div id="errors" class="word-break"></div>
 
         <div class="search-panel" id="display_search">
@@ -77,6 +78,7 @@
                 <hr/>
                 <input type="hidden" id="link_url" class="mt-2 word-break">
             </div>
+        </div>
         </div>
 
     </div>
