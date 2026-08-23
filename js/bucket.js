@@ -90,6 +90,22 @@ add_button.addEventListener("click", function() {
 
 
 /**
+ * Add event listener for canceling out of this form, back to the bookmark
+ * popup - mirrors the redirect bookmark.js uses to get here in the first
+ * place
+ *
+ * @type Element
+ */
+const cancel_button = document.querySelector('#cancel_bucket');
+
+cancel_button.addEventListener("click", function() {
+    window.location.replace('./bookmark.html');
+
+    return true;
+});
+
+
+/**
  * Add event listener for logout
  *
  * @type Element

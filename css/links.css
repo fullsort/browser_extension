@@ -501,6 +501,26 @@ small {
     box-shadow: 0 0 0 0.2rem var(--fs-primary-soft)
 }
 
+/* Matches FullSort.Dev's .btn-secondary tokens (--fs-secondary-background/
+   -text/-hover), for a lower-emphasis action next to a .btn-info primary
+   one (e.g. Cancel next to Save). */
+.btn-secondary {
+    background-color: var(--fs-bg-subtle);
+    border-color: var(--fs-border);
+    color: var(--fs-text-muted);
+}
+
+.btn-secondary:hover {
+    background-color: var(--fs-border);
+    border-color: var(--fs-border);
+}
+
+.btn-secondary.focus,
+.btn-secondary:focus {
+    -webkit-box-shadow: 0 0 0 0.2rem var(--fs-border);
+    box-shadow: 0 0 0 0.2rem var(--fs-border)
+}
+
 .btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
