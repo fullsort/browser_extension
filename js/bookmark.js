@@ -115,6 +115,11 @@ const SEARCH_DEBOUNCE_MS = 250;
 const quick_search_input = document.querySelector('#quick_search');
 const search_results = document.querySelector('#search_results');
 
+// The HTML autofocus attribute on #quick_search can be unreliable in a
+// Chrome extension popup depending on load timing, so focus it explicitly
+// as well when the popup opens.
+quick_search_input.focus();
+
 let search_debounce_timer = null;
 let search_request_id = 0;
 let active_result_index = -1;
