@@ -352,13 +352,15 @@ select:focus {
 }
 
 .bucket-select-menu {
+    /* Opens upward - the trigger sits near the bottom of the form, so a
+       downward menu would mostly render past the popup's visible area. */
     display: none;
     position: absolute;
     left: 0;
     right: 0;
-    top: 100%;
+    bottom: 100%;
     z-index: 10;
-    margin-top: 4px;
+    margin-bottom: 4px;
     max-height: 220px;
     overflow-y: auto;
     background-color: var(--fs-bg);
