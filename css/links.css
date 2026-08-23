@@ -311,6 +311,12 @@ small {
     vertical-align: middle;
 }
 
+.row-favorite {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .switch {
     position: relative;
     display: inline-block;
