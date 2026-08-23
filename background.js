@@ -251,6 +251,68 @@ function get_buckets() {
 
 
 /**
+ * Quick-search the user's buckets and links, for the popup's typeahead
+ * search box (mirrors the "global search" in the header of app.fullsort.com,
+ * see resources/views/layouts/app.blade.php's fullsortSearch()).
+ *
+ *      IMPORTANT - backend dependency: as of this writing, the FullSort.Dev
+ *      codebase only exposes matching search under the session-authenticated
+ *      web route GET /search (HomeController@search), not under the
+ *      Bearer-token /api/* routes this extension otherwise talks to. This
+ *      calls a GET /api/search?search=%QUERY endpoint that does not exist
+ *      yet and needs to be added server-side (mirroring HomeController@search,
+ *      registered under the existing auth:api route group in routes/api.php)
+ *      before this feature will return real results. Until then this will
+ *      always resolve to an empty result set.
+ *
+ * @param {String} query
+ * @returns {Promise} resolves { buckets: [], links: [] }
+ */
+function quick_search(query) {
+    const empty = { buckets: [], links: [] };
+
+    if (!query) {
+        return new Promise(resolve => resolve(empty));
+    }
+
+    return chrome.storage.local.get('token')
+        .then(res => {
+            return fetch('https://app.fullsort.com/api/search?search=' + encodeURIComponent(query), {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': 'Bearer ' + res.token
+                }
+            })
+            .then(res => {
+                return new Promise(resolve => {
+                    if (res.status !== 200) {
+                        resolve(empty);
+                        return;
+                    }
+
+                    res.json()
+                        .then(res => {
+                            resolve({
+                                buckets: res.buckets || [],
+                                links: res.links || []
+                            });
+                        })
+                        .catch(err => {
+                            console.log(err);
+                            resolve(empty);
+                        });
+                });
+            })
+            .catch(err => {
+                console.log(err);
+                return empty;
+            });
+        });
+}
+
+
+/**
  * Send api request to bookmark url
  *
  * @param {type} info
@@ -398,6 +460,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         get_buckets()
             .then(res => sendResponse(res))
             .catch(err => { console.log(err); sendResponse([]); });
+    } else if (request.message === 'search') {
+        // Quick-search buckets and links for the typeahead search box
+        quick_search(request.payload && request.payload.search)
+            .then(res => sendResponse(res))
+            .catch(err => { console.log(err); sendResponse({ buckets: [], links: [] }); });
     } else if (request.message === 'bookmark') {
         // Save bookmark
         bookmark_url(request.payload)

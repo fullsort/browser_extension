@@ -100,6 +100,224 @@ getTabs();
 
 
 /**
+ * Quick-search typeahead - lets the user search their buckets and links the
+ * same way the "global search" in the fullsort.com header does. Selecting a
+ * bucket result sets it as the destination bucket for this bookmark;
+ * selecting a link result opens that link in a new tab.
+ *
+ */
+const DEFAULT_BUCKET_ICON = 'fab fa-bitbucket';
+const ICON_URL = 'https://icons.fullsort.com';
+const DEFAULT_LINK_ICON_PATH = '_default/transparent_16x16.png';
+const SEARCH_MIN_LENGTH = 3;
+const SEARCH_DEBOUNCE_MS = 250;
+
+const quick_search_input = document.querySelector('#quick_search');
+const search_results = document.querySelector('#search_results');
+
+// The HTML autofocus attribute on #quick_search can be unreliable in a
+// Chrome extension popup depending on load timing, so focus it explicitly
+// as well when the popup opens.
+quick_search_input.focus();
+
+let search_debounce_timer = null;
+let search_request_id = 0;
+let active_result_index = -1;
+
+/**
+ * Hide and clear the search results dropdown
+ *
+ * @returns {undefined}
+ */
+function close_search_results() {
+    search_results.classList.remove('open');
+    search_results.textContent = '';
+    active_result_index = -1;
+}
+
+/**
+ * Pick this bucket as the bookmark's destination bucket
+ *
+ * @param {Object} bucket
+ * @returns {undefined}
+ */
+function select_search_bucket(bucket) {
+    const select = document.querySelector('#link_bucket');
+
+    let option = Array.from(select.options).find(function(opt) {
+        return opt.value === String(bucket.id);
+    });
+
+    if (!option) {
+        option = document.createElement('option');
+        option.value = bucket.id;
+        option.text = bucket.name;
+        select.insertBefore(option, select.firstChild.nextSibling);
+    }
+
+    select.value = bucket.id;
+}
+
+/**
+ * Open this link's URL in a new tab
+ *
+ * @param {Object} link
+ * @returns {undefined}
+ */
+function select_search_link(link) {
+    chrome.tabs.create({ url: link.url });
+}
+
+/**
+ * Render one row of search results (a header + a list of items)
+ *
+ * @param {String} label
+ * @param {Array} items
+ * @param {String} type 'bucket' or 'link'
+ * @returns {undefined}
+ */
+function render_search_group(label, items, type) {
+    const heading = document.createElement('div');
+    heading.className = 'search-group-label';
+    heading.textContent = label;
+    search_results.appendChild(heading);
+
+    if (items.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'search-result-empty';
+        empty.textContent = 'No matching ' + label.toLowerCase() + '.';
+        search_results.appendChild(empty);
+        return;
+    }
+
+    items.forEach(function(item) {
+        const row = document.createElement('div');
+        row.className = 'search-result-item';
+        row.dataset.searchType = type;
+
+        if (type === 'bucket') {
+            const icon = document.createElement('i');
+            icon.className = item.icon || DEFAULT_BUCKET_ICON;
+            row.appendChild(icon);
+        } else {
+            const icon = document.createElement('img');
+            icon.className = 'search-result-icon';
+            icon.src = ICON_URL + '/' + (item.icon || DEFAULT_LINK_ICON_PATH);
+            // Fall back to the default transparent icon if the link's own
+            // icon fails to load (e.g. a bad/missing key on the icon host)
+            icon.addEventListener('error', function on_icon_error() {
+                icon.removeEventListener('error', on_icon_error);
+                icon.src = ICON_URL + '/' + DEFAULT_LINK_ICON_PATH;
+            });
+            row.appendChild(icon);
+        }
+
+        const name = document.createElement('span');
+        name.className = 'search-result-name';
+        name.textContent = item.name;
+        row.appendChild(name);
+
+        row.addEventListener('click', function() {
+            if (type === 'bucket') {
+                select_search_bucket(item);
+            } else {
+                select_search_link(item);
+            }
+
+            quick_search_input.value = '';
+            close_search_results();
+        });
+
+        search_results.appendChild(row);
+    });
+}
+
+/**
+ * Send the search query to the background script and render the results
+ *
+ * @param {String} query
+ * @returns {undefined}
+ */
+function run_search(query) {
+    const this_request = ++search_request_id;
+
+    chrome.runtime.sendMessage({ message: 'search',
+        payload: { search: query }},
+        function(response) {
+            // Ignore stale responses from a previous, superseded request
+            if (this_request !== search_request_id) {
+                return;
+            }
+
+            search_results.textContent = '';
+            active_result_index = -1;
+
+            const buckets = (response && response.buckets) || [];
+            const links = (response && response.links) || [];
+
+            render_search_group('Buckets', buckets, 'bucket');
+            render_search_group('Links', links, 'link');
+
+            search_results.classList.add('open');
+        });
+}
+
+quick_search_input.addEventListener('input', function() {
+    const query = quick_search_input.value.trim();
+
+    clearTimeout(search_debounce_timer);
+
+    if (query.length < SEARCH_MIN_LENGTH) {
+        close_search_results();
+        return;
+    }
+
+    search_debounce_timer = setTimeout(function() {
+        run_search(query);
+    }, SEARCH_DEBOUNCE_MS);
+});
+
+quick_search_input.addEventListener('keydown', function(ev) {
+    const items = search_results.querySelectorAll('.search-result-item');
+
+    if (ev.key === 'Escape') {
+        close_search_results();
+        return;
+    }
+
+    if (items.length === 0) {
+        return;
+    }
+
+    if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        active_result_index = Math.min(active_result_index + 1, items.length - 1);
+    } else if (ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        active_result_index = Math.max(active_result_index - 1, 0);
+    } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        if (active_result_index >= 0) {
+            items[active_result_index].click();
+        }
+        return;
+    } else {
+        return;
+    }
+
+    items.forEach(function(item, i) {
+        item.classList.toggle('active', i === active_result_index);
+    });
+});
+
+document.addEventListener('click', function(ev) {
+    if (!quick_search_input.contains(ev.target) && !search_results.contains(ev.target)) {
+        close_search_results();
+    }
+});
+
+
+/**
  * Add event listener for on click of COPY button
  *
  * @type Element
