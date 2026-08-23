@@ -370,6 +370,29 @@ small {
     transform: translateX(18px);
 }
 
+.search-panel {
+    background-color: #f5f8fb;
+    border: 1px solid #cfe0ea;
+    border-radius: 4px;
+    padding: 0.6rem 0.6rem 0.5rem;
+}
+
+.search-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 75%;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #4a6b80;
+    margin-bottom: 0.4rem;
+}
+
+.search-panel-header i {
+    color: #00BFFF;
+}
+
 .search-wrap {
     position: relative;
 }

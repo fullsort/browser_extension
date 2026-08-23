@@ -23,12 +23,18 @@
 
         <div id="errors" class="word-break"></div>
 
-        <div class="row mt-3" id="display_search">
-            <div class="column-100 search-wrap">
-                <input type="text" id="quick_search" class="m-0 p-2 bookmark" placeholder="Search buckets &amp; links..." autocomplete="off"><br/>
-                <small class="ml-2 strong">Search</small>
-                <div id="search_results" class="search-results"></div>
+        <div class="search-panel" id="display_search">
+            <div class="search-panel-header"><i class="fa fa-search"></i> Quick Search</div>
+            <div class="row">
+                <div class="column-100 search-wrap">
+                    <input type="text" id="quick_search" class="m-0 p-2 bookmark" placeholder="Search your buckets &amp; links..." autocomplete="off">
+                    <div id="search_results" class="search-results"></div>
+                </div>
             </div>
+        </div>
+
+        <div class="row my-3 divider">
+            <div class="column-100"><span>Add New Bookmark</span></div>
         </div>
 
         <div class="row my-3" id="display_name">
