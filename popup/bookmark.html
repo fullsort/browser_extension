@@ -64,9 +64,17 @@
 
         <div class="row mt-3" id="display_bucket">
             <div class="column-80">
-                <select id="link_bucket" class="mr-2 p-1" name="bucket">
-                    <option value="">-- Bucket --</option>
-                </select>
+                <div class="bucket-select mr-2" id="bucket_select">
+                    <button type="button" class="bucket-select-trigger" id="bucket_select_trigger" aria-haspopup="listbox" aria-expanded="false">
+                        <i class="fa fa-folder-o bucket-select-icon" id="bucket_select_icon"></i>
+                        <span class="bucket-select-label" id="bucket_select_label">-- Bucket --</span>
+                        <i class="fa fa-caret-down bucket-select-caret"></i>
+                    </button>
+                    <div class="bucket-select-menu" id="bucket_select_menu" role="listbox"></div>
+                    <select id="link_bucket" name="bucket" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                        <option value="">-- Bucket --</option>
+                    </select>
+                </div>
             </div>
             <div class="column-20 text-right">
                 <button id="add_bookmark" class="btn btn-info btn-sm"><!--<i class="fa fa-plus mr-1"> </i> -->Save</button>

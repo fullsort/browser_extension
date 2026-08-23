@@ -2,6 +2,10 @@
 // Sentinel value for the "+ New" option in the bucket dropdown
 const NEW_BUCKET_VALUE = '__new_bucket__';
 
+// Fallback icon (Font Awesome class string) for a bucket that has none set,
+// shared by the bucket dropdown and the quick-search results list below.
+const DEFAULT_BUCKET_ICON = 'fab fa-bitbucket';
+
 // Hide the div that displays errors
 const errors = document.querySelector('#errors');
 errors.style.display = "none";
@@ -33,6 +37,210 @@ function render_errors(errors_by_field) {
 }
 
 /**
+ * Bucket dropdown - a custom icon+name dropdown standing in for a plain
+ * <select>, since Chrome doesn't render icons inside native <option>
+ * elements. #link_bucket stays in the DOM (hidden) as the source of truth
+ * for its value/options, so the rest of this file (and select_search_bucket
+ * below) keeps reading/writing it exactly as before; this block is just
+ * responsible for keeping the visible trigger + menu in sync with it.
+ */
+const link_bucket_select = document.querySelector('#link_bucket');
+const bucket_select_wrap = document.querySelector('#bucket_select');
+const bucket_select_trigger = document.querySelector('#bucket_select_trigger');
+const bucket_select_icon = document.querySelector('#bucket_select_icon');
+const bucket_select_label = document.querySelector('#bucket_select_label');
+const bucket_select_menu = document.querySelector('#bucket_select_menu');
+
+/**
+ * Build one clickable icon+name row for the bucket dropdown menu
+ *
+ * @param {String|Number} id
+ * @param {String} name
+ * @param {String} icon Font Awesome class string, e.g. "fab fa-bitbucket"
+ * @returns {HTMLElement}
+ */
+function build_bucket_row(id, name, icon) {
+    const row = document.createElement('div');
+    row.className = 'bucket-select-option';
+    row.dataset.value = id;
+    row.setAttribute('role', 'option');
+
+    const icon_el = document.createElement('i');
+    icon_el.className = icon || DEFAULT_BUCKET_ICON;
+    row.appendChild(icon_el);
+
+    const label = document.createElement('span');
+    label.className = 'bucket-select-name';
+    label.textContent = name;
+    row.appendChild(label);
+
+    row.addEventListener('click', function() {
+        select_bucket(id);
+        close_bucket_menu();
+    });
+
+    return row;
+}
+
+/**
+ * Add one bucket as both a hidden <option> (so #link_bucket's value/options
+ * keep working the same way they always have) and a visible row in the
+ * custom dropdown menu
+ *
+ * @param {String|Number} id
+ * @param {String} name
+ * @param {String} icon
+ * @returns {undefined}
+ */
+function add_bucket_option(id, name, icon) {
+    const display_name = name.replace(/&nbsp;/g, "\xA0");
+
+    const option = document.createElement('option');
+    option.text = display_name;
+    option.value = id;
+    option.dataset.icon = icon || '';
+    link_bucket_select.appendChild(option);
+
+    bucket_select_menu.appendChild(build_bucket_row(id, display_name, icon));
+}
+
+/**
+ * Add the non-interactive divider between real buckets and "+ New"
+ *
+ * @returns {undefined}
+ */
+function add_bucket_divider() {
+    const option = document.createElement('option');
+    option.textContent = '------------';
+    option.value = '';
+    option.disabled = true;
+    link_bucket_select.appendChild(option);
+
+    const divider = document.createElement('div');
+    divider.className = 'bucket-select-divider';
+    bucket_select_menu.appendChild(divider);
+}
+
+/**
+ * Add the "+ New" row/option that navigates to bucket.html
+ *
+ * @returns {undefined}
+ */
+function add_bucket_new_option() {
+    const option = document.createElement('option');
+    option.textContent = '+ New';
+    option.value = NEW_BUCKET_VALUE;
+    link_bucket_select.appendChild(option);
+
+    const row = build_bucket_row(NEW_BUCKET_VALUE, '+ New', 'fa fa-plus');
+    row.classList.add('bucket-select-new');
+    bucket_select_menu.appendChild(row);
+}
+
+/**
+ * Set #link_bucket's value to the given id, update the visible trigger to
+ * match, and fire a 'change' event - setting .value programmatically
+ * doesn't do that on its own, and the "+ New" redirect below relies on it.
+ *
+ * @param {String|Number} id
+ * @returns {undefined}
+ */
+function select_bucket(id) {
+    const option = Array.from(link_bucket_select.options).find(function(opt) {
+        return opt.value === String(id);
+    });
+
+    link_bucket_select.value = id;
+
+    if (option) {
+        bucket_select_label.textContent = option.text || '-- Bucket --';
+        bucket_select_icon.className = option.dataset.icon || (id === NEW_BUCKET_VALUE ? 'fa fa-plus' : 'fa fa-folder-o');
+    }
+
+    bucket_select_menu.querySelectorAll('.bucket-select-option').forEach(function(row) {
+        row.classList.toggle('active', row.dataset.value === String(id));
+    });
+
+    link_bucket_select.dispatchEvent(new Event('change'));
+}
+
+/**
+ * Open the bucket dropdown menu
+ *
+ * @returns {undefined}
+ */
+function open_bucket_menu() {
+    bucket_select_menu.classList.add('open');
+    bucket_select_trigger.setAttribute('aria-expanded', 'true');
+}
+
+/**
+ * Close the bucket dropdown menu
+ *
+ * @returns {undefined}
+ */
+function close_bucket_menu() {
+    bucket_select_menu.classList.remove('open');
+    bucket_select_trigger.setAttribute('aria-expanded', 'false');
+}
+
+bucket_select_trigger.addEventListener('click', function() {
+    if (bucket_select_menu.classList.contains('open')) {
+        close_bucket_menu();
+    } else {
+        open_bucket_menu();
+    }
+});
+
+bucket_select_trigger.addEventListener('keydown', function(ev) {
+    const rows = Array.from(bucket_select_menu.querySelectorAll('.bucket-select-option'));
+
+    if (ev.key === 'Escape') {
+        close_bucket_menu();
+        return;
+    }
+
+    if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp' && ev.key !== 'Enter') {
+        return;
+    }
+
+    ev.preventDefault();
+
+    if (!bucket_select_menu.classList.contains('open')) {
+        open_bucket_menu();
+        return;
+    }
+
+    if (rows.length === 0) {
+        return;
+    }
+
+    let index = rows.findIndex(function(row) { return row.classList.contains('kbd-active'); });
+
+    if (ev.key === 'ArrowDown') {
+        index = Math.min(index + 1, rows.length - 1);
+    } else if (ev.key === 'ArrowUp') {
+        index = Math.max(index - 1, 0);
+    } else if (ev.key === 'Enter') {
+        if (index >= 0) {
+            rows[index].click();
+        }
+        return;
+    }
+
+    rows.forEach(function(row, i) {
+        row.classList.toggle('kbd-active', i === index);
+    });
+    rows[index].scrollIntoView({ block: 'nearest' });
+});
+
+document.addEventListener('click', function(ev) {
+    if (!bucket_select_wrap.contains(ev.target)) {
+        close_bucket_menu();
+    }
+});
+
+/**
  * Send a message to the background.js script to validate the token
  */
 function authenticate() {
@@ -48,28 +256,12 @@ function authenticate() {
                 chrome.runtime.sendMessage({ message: 'get-buckets',
                     payload: {}},
                     function (res) {
-                        var select = document.getElementById("link_bucket");
-
-                        for(var i = 0; i < res.length; i++) {
-                            var opt = res[i]['name'];
-                            var id = res[i]['id'];
-                            var el = document.createElement("option");
-                            el.text = opt.replace(/&nbsp;/g, "\xA0");
-                            el.value = id;
-                            select.appendChild(el);
+                        for (var i = 0; i < res.length; i++) {
+                            add_bucket_option(res[i]['id'], res[i]['name'], res[i]['icon']);
                         }
 
-                        var el = document.createElement("option");
-                        el.textContent = '------------';
-                        el.value = '';
-                        el.disabled = true;
-                        select.appendChild(el);
-
-                        var el = document.createElement("option");
-                        el.textContent = '+ New';
-                        el.value = NEW_BUCKET_VALUE;
-                        select.appendChild(el);
-
+                        add_bucket_divider();
+                        add_bucket_new_option();
                     });
             }
         });
@@ -106,7 +298,6 @@ getTabs();
  * selecting a link result opens that link in a new tab.
  *
  */
-const DEFAULT_BUCKET_ICON = 'fab fa-bitbucket';
 const ICON_URL = 'https://icons.fullsort.com';
 const DEFAULT_LINK_ICON_PATH = '_default/transparent_16x16.png';
 const SEARCH_MIN_LENGTH = 3;
@@ -142,20 +333,24 @@ function close_search_results() {
  * @returns {undefined}
  */
 function select_search_bucket(bucket) {
-    const select = document.querySelector('#link_bucket');
-
-    let option = Array.from(select.options).find(function(opt) {
+    const option = Array.from(link_bucket_select.options).find(function(opt) {
         return opt.value === String(bucket.id);
     });
 
     if (!option) {
-        option = document.createElement('option');
-        option.value = bucket.id;
-        option.text = bucket.name;
-        select.insertBefore(option, select.firstChild.nextSibling);
+        const new_option = document.createElement('option');
+        new_option.value = bucket.id;
+        new_option.text = bucket.name;
+        new_option.dataset.icon = bucket.icon || '';
+        link_bucket_select.insertBefore(new_option, link_bucket_select.firstChild.nextSibling);
+
+        // Keep the dropdown menu's row order in sync: insert as the first
+        // real bucket row, right after the "-- Bucket --" placeholder has
+        // no row of its own, so this becomes the menu's first entry.
+        bucket_select_menu.insertBefore(build_bucket_row(bucket.id, bucket.name, bucket.icon), bucket_select_menu.firstChild);
     }
 
-    select.value = bucket.id;
+    select_bucket(bucket.id);
 }
 
 /**
