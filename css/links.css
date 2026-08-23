@@ -1,21 +1,26 @@
+@import url(https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700);
+
+/* Palette mirrors the main app's design tokens (see FullSort.Dev's
+   public/css/links.css :root block) so the extension looks like an
+   extension of fullsort.com rather than a separate product. */
 :root {
-    --fs-primary: #2A5DB0;
-    --fs-primary-hover: #1F478A;
-    --fs-primary-light: #EAF1FB;
-    --fs-primary-soft: #DCE8FB;
-    --fs-text: #1F2937;
-    --fs-text-muted: #67728A;
-    --fs-border: #D9DFE7;
-    --fs-border-strong: #C3CCD9;
+    --fs-primary: #17a2b8;
+    --fs-primary-hover: #148c9f;
+    --fs-primary-light: #e5f5f8;
+    --fs-primary-soft: rgba(23, 162, 184, 0.25);
+    --fs-text: #444444;
+    --fs-text-muted: #666666;
+    --fs-border: #e1e6ea;
+    --fs-border-strong: #ced9e4;
     --fs-bg: #FFFFFF;
-    --fs-bg-page: #EEF2F7;
-    --fs-bg-subtle: #F6F8FB;
+    --fs-bg-page: #F1F0F0;
+    --fs-bg-subtle: #f8f9fa;
     --fs-success: #2F9E64;
     --fs-warning: #B7791F;
-    --fs-danger: #D6455A;
-    --fs-info: #2A5DB0;
+    --fs-danger: #E57373;
+    --fs-info: #17a2b8;
     --fs-shadow: 0 1px 3px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
-    --fs-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --fs-font: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
@@ -23,6 +28,7 @@ body {
     background-color: var(--fs-bg-page);
     color: var(--fs-text);
     font-family: var(--fs-font);
+    font-weight: 300;
 }
 
 body.login {
@@ -372,24 +378,25 @@ small {
     color: #ffffff;
 }
 
+/* Colors match FullSort.Dev's .btn-googleplus / .btn-facebook exactly;
+   the main site doesn't define a separate hover shade for these, so a
+   brightness filter provides hover feedback without inventing a new color. */
 .btn-google {
-    background-color: #DB4437;
-    border-color: #DB4437;
+    background-color: #dd4b39;
+    border-color: #dd4b39;
 }
 
 .btn-google:hover {
-    background-color: #C23321;
-    border-color: #C23321;
+    filter: brightness(0.9);
 }
 
 .btn-facebook {
-    background-color: #4267B2;
-    border-color: #4267B2;
+    background-color: #3b5998;
+    border-color: #3b5998;
 }
 
 .btn-facebook:hover {
-    background-color: #35528F;
-    border-color: #35528F;
+    filter: brightness(0.9);
 }
 
 .divider {
