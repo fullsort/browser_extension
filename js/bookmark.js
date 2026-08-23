@@ -107,6 +107,8 @@ getTabs();
  *
  */
 const DEFAULT_BUCKET_ICON = 'fab fa-bitbucket';
+const ICON_URL = 'https://icons.fullsort.com';
+const DEFAULT_LINK_ICON_PATH = '_default/transparent_16x16.png';
 const SEARCH_MIN_LENGTH = 3;
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -188,9 +190,22 @@ function render_search_group(label, items, type) {
         row.className = 'search-result-item';
         row.dataset.searchType = type;
 
-        const icon = document.createElement('i');
-        icon.className = type === 'bucket' ? (item.icon || DEFAULT_BUCKET_ICON) : 'fa fa-link';
-        row.appendChild(icon);
+        if (type === 'bucket') {
+            const icon = document.createElement('i');
+            icon.className = item.icon || DEFAULT_BUCKET_ICON;
+            row.appendChild(icon);
+        } else {
+            const icon = document.createElement('img');
+            icon.className = 'search-result-icon';
+            icon.src = ICON_URL + '/' + (item.icon || DEFAULT_LINK_ICON_PATH);
+            // Fall back to the default transparent icon if the link's own
+            // icon fails to load (e.g. a bad/missing key on the icon host)
+            icon.addEventListener('error', function on_icon_error() {
+                icon.removeEventListener('error', on_icon_error);
+                icon.src = ICON_URL + '/' + DEFAULT_LINK_ICON_PATH;
+            });
+            row.appendChild(icon);
+        }
 
         const name = document.createElement('span');
         name.className = 'search-result-name';
