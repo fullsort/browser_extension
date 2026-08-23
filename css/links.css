@@ -353,24 +353,45 @@ select:focus {
 
 .bucket-select-menu {
     /* Opens upward - the trigger sits near the bottom of the form, so a
-       downward menu would mostly render past the popup's visible area. */
+       downward menu would mostly render past the popup's visible area. A
+       flex column keeps the search box pinned right above the trigger
+       (bucket-select-search-wrap is last in the DOM) while only the list
+       above it scrolls. */
     display: none;
+    flex-direction: column;
     position: absolute;
     left: 0;
     right: 0;
     bottom: 100%;
     z-index: 10;
     margin-bottom: 4px;
-    max-height: 220px;
-    overflow-y: auto;
+    max-height: 260px;
     background-color: var(--fs-bg);
     border: 1px solid var(--fs-border);
     border-radius: 6px;
     box-shadow: var(--fs-shadow);
+    overflow: hidden;
 }
 
 .bucket-select-menu.open {
-    display: block;
+    display: flex;
+}
+
+.bucket-select-list {
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.bucket-select-search-wrap {
+    flex-shrink: 0;
+    padding: 0.4rem;
+    border-top: 1px solid var(--fs-border);
+    background-color: var(--fs-bg-subtle);
+}
+
+.bucket-select-search {
+    width: 100%!important;
+    box-sizing: border-box!important;
 }
 
 .bucket-select-option {

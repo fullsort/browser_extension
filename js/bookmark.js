@@ -50,6 +50,9 @@ const bucket_select_trigger = document.querySelector('#bucket_select_trigger');
 const bucket_select_icon = document.querySelector('#bucket_select_icon');
 const bucket_select_label = document.querySelector('#bucket_select_label');
 const bucket_select_menu = document.querySelector('#bucket_select_menu');
+const bucket_select_list = document.querySelector('#bucket_select_list');
+const bucket_select_search = document.querySelector('#bucket_select_search');
+const bucket_select_empty = document.querySelector('#bucket_select_empty');
 
 /**
  * Build one clickable icon+name row for the bucket dropdown menu
@@ -101,7 +104,7 @@ function add_bucket_option(id, name, icon) {
     option.dataset.icon = icon || '';
     link_bucket_select.appendChild(option);
 
-    bucket_select_menu.appendChild(build_bucket_row(id, display_name, icon));
+    bucket_select_list.appendChild(build_bucket_row(id, display_name, icon));
 }
 
 /**
@@ -118,7 +121,7 @@ function add_bucket_divider() {
 
     const divider = document.createElement('div');
     divider.className = 'bucket-select-divider';
-    bucket_select_menu.appendChild(divider);
+    bucket_select_list.appendChild(divider);
 }
 
 /**
@@ -134,7 +137,7 @@ function add_bucket_new_option() {
 
     const row = build_bucket_row(NEW_BUCKET_VALUE, '+ New', 'fa fa-plus');
     row.classList.add('bucket-select-new');
-    bucket_select_menu.appendChild(row);
+    bucket_select_list.appendChild(row);
 }
 
 /**
@@ -157,7 +160,7 @@ function select_bucket(id) {
         bucket_select_icon.className = option.dataset.icon || (id === NEW_BUCKET_VALUE ? 'fa fa-plus' : 'fa fa-folder-o');
     }
 
-    bucket_select_menu.querySelectorAll('.bucket-select-option').forEach(function(row) {
+    bucket_select_list.querySelectorAll('.bucket-select-option').forEach(function(row) {
         row.classList.toggle('active', row.dataset.value === String(id));
     });
 
@@ -165,13 +168,51 @@ function select_bucket(id) {
 }
 
 /**
- * Open the bucket dropdown menu
+ * Show/hide bucket rows in the dropdown to match a search query (matches
+ * anywhere in the bucket's name, case-insensitive). The "+ New" row is
+ * never filtered out, so it's always reachable even with no matches.
+ *
+ * @param {String} query
+ * @returns {undefined}
+ */
+function filter_bucket_rows(query) {
+    const normalized = query.trim().toLowerCase();
+    const rows = Array.from(bucket_select_list.querySelectorAll('.bucket-select-option:not(.bucket-select-new)'));
+    let visible_count = 0;
+
+    rows.forEach(function(row) {
+        row.classList.remove('kbd-active');
+
+        const name = row.querySelector('.bucket-select-name').textContent.toLowerCase();
+        const match = normalized === '' || name.indexOf(normalized) !== -1;
+        row.style.display = match ? '' : 'none';
+
+        if (match) {
+            visible_count++;
+        }
+    });
+
+    const no_matches = normalized !== '' && visible_count === 0;
+    bucket_select_empty.style.display = no_matches ? '' : 'none';
+
+    const divider = bucket_select_list.querySelector('.bucket-select-divider');
+    if (divider) {
+        divider.style.display = no_matches ? 'none' : '';
+    }
+}
+
+/**
+ * Open the bucket dropdown menu, reset any previous search, and focus the
+ * search box so the user can immediately start typing to filter
  *
  * @returns {undefined}
  */
 function open_bucket_menu() {
     bucket_select_menu.classList.add('open');
     bucket_select_trigger.setAttribute('aria-expanded', 'true');
+    bucket_select_search.value = '';
+    filter_bucket_rows('');
+    bucket_select_search.focus();
 }
 
 /**
@@ -192,11 +233,28 @@ bucket_select_trigger.addEventListener('click', function() {
     }
 });
 
+// Opening from the trigger itself only needs to handle "not open yet" -
+// once open, focus moves into the search box below, which has its own
+// keydown handler for filtering/navigating/selecting.
 bucket_select_trigger.addEventListener('keydown', function(ev) {
-    const rows = Array.from(bucket_select_menu.querySelectorAll('.bucket-select-option'));
+    if (bucket_select_menu.classList.contains('open')) {
+        return;
+    }
 
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp' || ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        open_bucket_menu();
+    }
+});
+
+bucket_select_search.addEventListener('input', function() {
+    filter_bucket_rows(bucket_select_search.value);
+});
+
+bucket_select_search.addEventListener('keydown', function(ev) {
     if (ev.key === 'Escape') {
         close_bucket_menu();
+        bucket_select_trigger.focus();
         return;
     }
 
@@ -204,12 +262,11 @@ bucket_select_trigger.addEventListener('keydown', function(ev) {
         return;
     }
 
-    ev.preventDefault();
+    const rows = Array.from(bucket_select_list.querySelectorAll('.bucket-select-option')).filter(function(row) {
+        return row.style.display !== 'none';
+    });
 
-    if (!bucket_select_menu.classList.contains('open')) {
-        open_bucket_menu();
-        return;
-    }
+    ev.preventDefault();
 
     if (rows.length === 0) {
         return;
@@ -222,15 +279,23 @@ bucket_select_trigger.addEventListener('keydown', function(ev) {
     } else if (ev.key === 'ArrowUp') {
         index = Math.max(index - 1, 0);
     } else if (ev.key === 'Enter') {
+        // With exactly one visible match, Enter picks it even before the
+        // user has arrowed down onto it - the common "type and hit enter"
+        // flow shouldn't require an extra keypress.
+        if (index < 0 && rows.length === 1) {
+            index = 0;
+        }
+
         if (index >= 0) {
             rows[index].click();
         }
         return;
     }
 
-    rows.forEach(function(row, i) {
-        row.classList.toggle('kbd-active', i === index);
+    rows.forEach(function(row) {
+        row.classList.remove('kbd-active');
     });
+    rows[index].classList.add('kbd-active');
     rows[index].scrollIntoView({ block: 'nearest' });
 });
 
@@ -344,10 +409,17 @@ function select_search_bucket(bucket) {
         new_option.dataset.icon = bucket.icon || '';
         link_bucket_select.insertBefore(new_option, link_bucket_select.firstChild.nextSibling);
 
-        // Keep the dropdown menu's row order in sync: insert as the first
-        // real bucket row, right after the "-- Bucket --" placeholder has
-        // no row of its own, so this becomes the menu's first entry.
-        bucket_select_menu.insertBefore(build_bucket_row(bucket.id, bucket.name, bucket.icon), bucket_select_menu.firstChild);
+        // Keep the dropdown list's row order in sync: insert as the first
+        // real bucket row (ahead of any existing bucket/divider/+New rows,
+        // right after the hidden "no matches" placeholder).
+        const first_row = bucket_select_list.querySelector('.bucket-select-option, .bucket-select-divider');
+        const new_row = build_bucket_row(bucket.id, bucket.name, bucket.icon);
+
+        if (first_row) {
+            bucket_select_list.insertBefore(new_row, first_row);
+        } else {
+            bucket_select_list.appendChild(new_row);
+        }
     }
 
     select_bucket(bucket.id);

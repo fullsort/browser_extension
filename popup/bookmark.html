@@ -70,7 +70,14 @@
                         <span class="bucket-select-label" id="bucket_select_label">-- Bucket --</span>
                         <i class="fa fa-caret-down bucket-select-caret"></i>
                     </button>
-                    <div class="bucket-select-menu" id="bucket_select_menu" role="listbox"></div>
+                    <div class="bucket-select-menu" id="bucket_select_menu">
+                        <div class="bucket-select-list" id="bucket_select_list" role="listbox">
+                            <div class="search-result-empty" id="bucket_select_empty" style="display: none;">No matching buckets.</div>
+                        </div>
+                        <div class="bucket-select-search-wrap">
+                            <input type="text" id="bucket_select_search" class="bucket-select-search" placeholder="Search buckets..." autocomplete="off">
+                        </div>
+                    </div>
                     <select id="link_bucket" name="bucket" class="visually-hidden" tabindex="-1" aria-hidden="true">
                         <option value="">-- Bucket --</option>
                     </select>
