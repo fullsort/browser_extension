@@ -86,13 +86,17 @@ function sign_in(user_info) {
  *      GET /redirect/{provider}  (redirect.provider)
  *      GET /callback/{provider}  (provider.callback)
  *
- *      Opens a Chrome-managed web auth flow at the redirect.provider route
- *      for the given provider, passing along the extension's
- *      chromiumapp.org redirect URI. Full Sort completes the provider
- *      handshake on its own servers and, once provider.callback finishes,
- *      is expected to redirect back to that URI with a `token` query param
- *      on success. On success, store the token in chrome local storage the
- *      same way sign_in() does.
+ *      Opens the redirect.provider route for the given provider, in a small
+ *      Chrome popup window sized by SOCIAL_AUTH_WINDOW below, passing along
+ *      the extension's chromiumapp.org redirect URI. Full Sort completes the
+ *      provider handshake on its own servers and, once provider.callback
+ *      finishes, is expected to redirect back to that URI with a `token`
+ *      query param on success. We watch the popup's own tab for that
+ *      redirect (see watch_auth_window below) rather than using
+ *      chrome.identity.launchWebAuthFlow, since that API opens a
+ *      Chrome-managed window whose size can't be customized - on many
+ *      displays it ends up taking up most of the screen. On success, store
+ *      the token in chrome local storage the same way sign_in() does.
  *
  *      IMPORTANT - backend dependency: as of this writing,
  *      Auth\RegisterController@provider_callback only completes a
@@ -104,7 +108,7 @@ function sign_in(user_info) {
  *      Socialite's state), and (2) when one is present, issue an API token
  *      (as /api/auth/login does) and redirect to it as
  *      `{redirect_uri}?token={token}` instead of (or in addition to)
- *      logging in a web session. Until then, launchWebAuthFlow below will
+ *      logging in a web session. Until then, watch_auth_window below will
  *      never see a matching redirect and this will always resolve 'fail'.
  *
  *      Note: unlike email/password sign-in, the resulting user_info has no
@@ -126,40 +130,118 @@ function social_sign_in(provider) {
     const auth_url = 'https://app.fullsort.com/redirect/' + provider +
         '?redirect_uri=' + encodeURIComponent(redirect_uri);
 
-    return new Promise(resolve => {
-        chrome.identity.launchWebAuthFlow(
-            { url: auth_url, interactive: true },
-            function(response_url) {
-                if (chrome.runtime.lastError || !response_url) {
-                    console.log('launchWebAuthFlow failed:', chrome.runtime.lastError && chrome.runtime.lastError.message, 'response_url:', response_url, 'auth_url:', auth_url);
-                    resolve('fail');
-                    return;
-                }
+    return open_auth_window(auth_url, redirect_uri)
+        .then(response_url => {
+            if (!response_url) {
+                return 'fail';
+            }
 
-                let token;
-                try {
-                    token = new URL(response_url).searchParams.get('token');
-                } catch (err) {
+            let token;
+            try {
+                token = new URL(response_url).searchParams.get('token');
+            } catch (err) {
+                console.log(err);
+                return 'fail';
+            }
+
+            if (!token) {
+                return 'fail';
+            }
+
+            return chrome.storage.local.set({ 'user_info': { provider: provider }, 'token': token })
+                .then(() => 'success')
+                .catch(err => {
                     console.log(err);
-                    resolve('fail');
-                    return;
-                }
+                    return 'fail';
+                });
+        });
+}
 
-                if (!token) {
-                    resolve('fail');
-                    return;
-                }
+/**
+ * Size (in pixels) of the popup window used for the social-login OAuth
+ * flow. Kept small and fixed rather than matching the browser window, since
+ * chrome.identity.launchWebAuthFlow's own window can't be resized and often
+ * ends up covering most of the screen.
+ */
+const SOCIAL_AUTH_WINDOW = { width: 480, height: 640 };
 
-                chrome.storage.local.set({ 'user_info': { provider: provider }, 'token': token }, function () {
-                    if (chrome.runtime.lastError) {
-                        resolve('fail');
+/**
+ * Open `auth_url` in a small, fixed-size popup window and watch it for a
+ * top-level navigation to `redirect_uri`. Resolves with the full redirect
+ * URL (including its query string) once that navigation happens, or with
+ * null if the user closes the window first or the window fails to open.
+ *
+ * This stands in for chrome.identity.launchWebAuthFlow, which performs the
+ * same "watch for a redirect back to the extension" job but always in a
+ * Chrome-managed window whose size we don't control.
+ *
+ * @param {String} auth_url
+ * @param {String} redirect_uri
+ * @returns {Promise<String|null>}
+ */
+function open_auth_window(auth_url, redirect_uri) {
+    return chrome.windows.getLastFocused()
+        .catch(() => null)
+        .then(parent_window => {
+            const position = {};
+            if (parent_window && typeof parent_window.left === 'number') {
+                position.left = Math.round(parent_window.left + (parent_window.width - SOCIAL_AUTH_WINDOW.width) / 2);
+                position.top = Math.round(parent_window.top + (parent_window.height - SOCIAL_AUTH_WINDOW.height) / 2);
+            }
+
+            return new Promise(resolve => {
+                let settled = false;
+                let auth_window_id = null;
+
+                function finish(result) {
+                    if (settled) {
                         return;
                     }
-                    resolve('success');
+                    settled = true;
+                    chrome.tabs.onUpdated.removeListener(on_updated);
+                    chrome.windows.onRemoved.removeListener(on_removed);
+                    if (auth_window_id !== null) {
+                        chrome.windows.remove(auth_window_id).catch(() => {});
+                    }
+                    resolve(result);
+                }
+
+                function on_updated(tab_id, change_info, tab) {
+                    if (auth_window_id === null || tab.windowId !== auth_window_id || !change_info.url) {
+                        return;
+                    }
+                    if (change_info.url.indexOf(redirect_uri) === 0) {
+                        finish(change_info.url);
+                    }
+                }
+
+                function on_removed(window_id) {
+                    if (window_id === auth_window_id) {
+                        finish(null);
+                    }
+                }
+
+                chrome.tabs.onUpdated.addListener(on_updated);
+                chrome.windows.onRemoved.addListener(on_removed);
+
+                chrome.windows.create(Object.assign(
+                    { url: auth_url, type: 'popup' },
+                    SOCIAL_AUTH_WINDOW,
+                    position
+                ))
+                .then(created_window => {
+                    if (settled) {
+                        // The window was already closed/matched before creation resolved.
+                        return;
+                    }
+                    auth_window_id = created_window.id;
+                })
+                .catch(err => {
+                    console.log('Failed to open social-login auth window:', err);
+                    finish(null);
                 });
-            }
-        );
-    });
+            });
+        });
 }
 
 /**
