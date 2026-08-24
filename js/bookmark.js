@@ -636,6 +636,7 @@ add_button.addEventListener("click", function() {
                 document.querySelector('#display_bucket').style.display = "none";
                 document.querySelector('#display_name').style.display = "none";
                 document.querySelector('#display_favorite').style.display = "none";
+                document.querySelector('#display_divider').style.display = "none";
 
                 const container = document.querySelector('#errors');
                 container.textContent = '';
