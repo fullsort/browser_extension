@@ -637,11 +637,12 @@ add_button.addEventListener("click", function() {
                 document.querySelector('#display_name').style.display = "none";
                 document.querySelector('#display_favorite').style.display = "none";
                 document.querySelector('#display_divider').style.display = "none";
+                document.querySelector('#display_search').style.display = "none";
 
                 const container = document.querySelector('#errors');
                 container.textContent = '';
                 const heading = document.createElement('h2');
-                heading.className = 'success';
+                heading.className = 'success text-center';
                 heading.textContent = 'Bookmark Added!';
                 container.appendChild(heading);
 
