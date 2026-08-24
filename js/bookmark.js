@@ -360,13 +360,18 @@ getTabs();
  * Quick-search typeahead - lets the user search their buckets and links the
  * same way the "global search" in the fullsort.com header does. Selecting a
  * bucket result sets it as the destination bucket for this bookmark;
- * selecting a link result opens that link in a new tab.
+ * selecting a link result opens that link's click-through route in a new tab.
  *
  */
 const ICON_URL = 'https://icons.fullsort.com';
 const DEFAULT_LINK_ICON_PATH = '_default/transparent_16x16.png';
 const SEARCH_MIN_LENGTH = 3;
 const SEARCH_DEBOUNCE_MS = 250;
+
+// Route that records the click and redirects to the link's real destination
+// (see FullSort.Dev's routes/web.php, link.click - Route::get('/link/click/{link}')).
+// Using this instead of the link's raw url lets the click be tracked server-side.
+const LINK_CLICK_URL_BASE = 'https://app.fullsort.com/link/click';
 
 const quick_search_input = document.querySelector('#quick_search');
 const search_results = document.querySelector('#search_results');
@@ -430,13 +435,14 @@ function select_search_bucket(bucket) {
 }
 
 /**
- * Open this link's URL in a new tab
+ * Open this link's click-through route (rather than its raw URL) in a new
+ * tab, so the click gets recorded server-side before redirecting.
  *
  * @param {Object} link
  * @returns {undefined}
  */
 function select_search_link(link) {
-    chrome.tabs.create({ url: link.url });
+    chrome.tabs.create({ url: LINK_CLICK_URL_BASE + '/' + link.id });
 }
 
 /**
