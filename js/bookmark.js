@@ -636,14 +636,40 @@ add_button.addEventListener("click", function() {
                 document.querySelector('#display_bucket').style.display = "none";
                 document.querySelector('#display_name').style.display = "none";
                 document.querySelector('#display_favorite').style.display = "none";
+                document.querySelector('#display_divider').style.display = "none";
+                document.querySelector('#display_search').style.display = "none";
 
                 const container = document.querySelector('#errors');
                 container.textContent = '';
                 const heading = document.createElement('h2');
-                heading.className = 'success';
+                heading.className = 'success text-center';
                 heading.textContent = 'Bookmark Added!';
                 container.appendChild(heading);
+
                 container.style.display = "block";
+
+                // Give the user a clear way back to the main screen instead
+                // of leaving them on this confirmation view with a hidden
+                // form and no next step. Placed below the "Add New Bookmark"
+                // divider, where the (now-hidden) form fields normally sit.
+                const back_button = document.createElement('button');
+                back_button.type = 'button';
+                back_button.id = 'back_to_bookmark';
+                back_button.className = 'btn btn-info btn-sm';
+
+                const back_icon = document.createElement('i');
+                back_icon.className = 'fa fa-arrow-left mr-1';
+                back_button.appendChild(back_icon);
+                back_button.appendChild(document.createTextNode('Add Another Bookmark'));
+
+                back_button.addEventListener('click', function() {
+                    window.location.reload();
+                });
+
+                const back_wrap = document.querySelector('#back_to_bookmark_wrap');
+                back_wrap.textContent = '';
+                back_wrap.appendChild(back_button);
+                document.querySelector('#display_back').style.display = "";
             } else {
                 render_errors(response.errors);
             }

@@ -139,6 +139,10 @@ m-0 {
     text-align: right;
 }
 
+.text-center {
+    text-align: center;
+}
+
 .align-bottom {
     vertical-align: bottom;
 }
@@ -527,11 +531,13 @@ small {
 }
 
 .icon-btn {
+    display: inline-block;
     background: transparent;
     border: 1px solid transparent;
     color: rgba(255, 255, 255, 0.9);
     border-radius: 4px;
     cursor: pointer;
+    text-decoration: none;
     -webkit-transition: background-color 0.15s ease-in-out;
     transition: background-color 0.15s ease-in-out;
 }
