@@ -112,9 +112,12 @@ function sign_in(user_info) {
  *      never see a matching redirect and this will always resolve 'fail'.
  *
  *      Note: unlike email/password sign-in, the resulting user_info has no
- *      `email`/`pass` fields, so re-auth cannot silently refresh an expired
- *      social-login session in the background - the user is instead sent
- *      back to sign-in.html to reconnect, same as any other invalid token.
+ *      `email`/`pass` fields, so silent_reauth()'s credential-based fallback
+ *      below can't refresh an expired social-login session - but its
+ *      refresh_token() call comes first and works for any login method (it
+ *      only needs the token itself, not credentials), so this only sends
+ *      the user back to sign-in.html once the token is past its API-side
+ *      refresh_ttl too.
  *
  * @param {String} provider 'google' or 'facebook'
  * @returns {Promise}
@@ -291,6 +294,122 @@ function get_stored_credentials(key) {
         });
 }
 
+/**
+ * Exchange the stored (possibly expired) token for a new one via
+ * POST /api/auth/refresh, without needing credentials of any kind - it
+ * works for any login method, including social logins, since it only
+ * needs the token itself. Succeeds as long as the token is still within
+ * the API's refresh_ttl (14 days as of this writing, see FullSort.Dev's
+ * config/jwt.php) and hasn't been blacklisted; fails the same way an
+ * expired/invalid token does otherwise (a non-200 response).
+ *
+ * @returns {Promise<String>} 'success' or 'fail'
+ */
+function refresh_token() {
+    return chrome.storage.local.get('token')
+        .then(res => fetch('https://app.fullsort.com/api/auth/refresh', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Authorization': 'Bearer ' + res.token
+            }
+        }))
+        .then(res => {
+            if (res.status !== 200) {
+                return 'fail';
+            }
+
+            return res.json()
+                .then(data => chrome.storage.local.set({ 'token': data.token }))
+                .then(() => 'success')
+                .catch(err => {
+                    console.log(err);
+                    return 'fail';
+                });
+        })
+        .catch(err => {
+            console.log(err);
+            return 'fail';
+        });
+}
+
+/**
+ * Attempt to silently refresh the stored token, without involving the
+ * user. Tries the token-only refresh_token() first (works for every login
+ * method); if that fails - e.g. the token is past refresh_ttl, or this
+ * extension is talking to a FullSort.Dev deploy that predates the
+ * /api/auth/refresh endpoint - falls back to signing back in with cached
+ * email/password credentials, same as before refresh_token() existed.
+ *
+ * This is the same fallback the 're-auth' message handler below uses when
+ * validate_token() finds the token expired; it's pulled out here so
+ * authenticated_fetch() can reuse it to recover mid-session (see
+ * authenticated_fetch's doc comment).
+ *
+ * For social-login accounts user_info has no email/pass (see
+ * social_sign_in above), so if refresh_token() fails, sign_in() resolves
+ * 'fail' here too and callers fall back to their normal "invalid token"
+ * handling - those users need to reconnect via sign-in.html only once
+ * their token is past refresh_ttl.
+ *
+ * @returns {Promise<String>} 'success' or 'fail'
+ */
+function silent_reauth() {
+    return refresh_token()
+        .then(result => {
+            if (result === 'success') {
+                return 'success';
+            }
+
+            return get_stored_credentials('user_info')
+                .then(user_info => sign_in(user_info));
+        })
+        .catch(err => {
+            console.log(err);
+            return 'fail';
+        });
+}
+
+/**
+ * Perform a Bearer-token fetch against a Full Sort API endpoint, attaching
+ * the stored token and transparently retrying once - after a silent
+ * re-auth - if the response comes back 401 (expired/invalid token).
+ *
+ * This is what keeps a signed-in session alive past the API's token TTL
+ * (15 minutes as of this writing, see FullSort.Dev's config/jwt.php)
+ * without the user re-entering credentials. Popup-open already re-checks
+ * the token via the 're-auth' message handler, but a token can also expire
+ * *during* an open popup - e.g. mid-search, or between loading buckets and
+ * submitting a bookmark - since nothing was re-validating it in between;
+ * this covers that case too, for every authenticated call.
+ *
+ * @param {String} url
+ * @param {Object} [options] fetch() options; any Authorization header is overwritten
+ * @returns {Promise<Response>}
+ */
+function authenticated_fetch(url, options) {
+    options = options || {};
+
+    function do_fetch() {
+        return chrome.storage.local.get('token')
+            .then(res => fetch(url, Object.assign({}, options, {
+                headers: Object.assign({}, options.headers, {
+                    'Authorization': 'Bearer ' + res.token
+                })
+            })));
+    }
+
+    return do_fetch()
+        .then(res => {
+            if (res.status !== 401) {
+                return res;
+            }
+
+            return silent_reauth()
+                .then(result => result === 'success' ? do_fetch() : res);
+        });
+}
+
 
 /**
  * Get buckets for authenticated user
@@ -298,37 +417,33 @@ function get_stored_credentials(key) {
  * @returns {Promise}
  */
 function get_buckets() {
-    return chrome.storage.local.get('token')
-        .then(res => {
-            return fetch('https://app.fullsort.com/api/buckets', {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + res.token
-                }
-            })
-            .then(res => {
-                return new Promise(resolve => {
-                    if (res.status !== 200) {
-                        resolve([]);
-                        return;
-                    }
+    return authenticated_fetch('https://app.fullsort.com/api/buckets', {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(res => {
+        return new Promise(resolve => {
+            if (res.status !== 200) {
+                resolve([]);
+                return;
+            }
 
-                    res.json()
-                        .then(res => {
-                            resolve(res);
-                        })
-                        .catch(err => {
-                            console.log(err);
-                            resolve([]);
-                        });
+            res.json()
+                .then(res => {
+                    resolve(res);
+                })
+                .catch(err => {
+                    console.log(err);
+                    resolve([]);
                 });
-            })
-            .catch(err => {
-                console.log(err);
-                return [];
-            });
         });
+    })
+    .catch(err => {
+        console.log(err);
+        return [];
+    });
 }
 
 
@@ -357,40 +472,36 @@ function quick_search(query) {
         return new Promise(resolve => resolve(empty));
     }
 
-    return chrome.storage.local.get('token')
-        .then(res => {
-            return fetch('https://app.fullsort.com/api/search?search=' + encodeURIComponent(query), {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + res.token
-                }
-            })
-            .then(res => {
-                return new Promise(resolve => {
-                    if (res.status !== 200) {
-                        resolve(empty);
-                        return;
-                    }
+    return authenticated_fetch('https://app.fullsort.com/api/search?search=' + encodeURIComponent(query), {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(res => {
+        return new Promise(resolve => {
+            if (res.status !== 200) {
+                resolve(empty);
+                return;
+            }
 
-                    res.json()
-                        .then(res => {
-                            resolve({
-                                buckets: res.buckets || [],
-                                links: res.links || []
-                            });
-                        })
-                        .catch(err => {
-                            console.log(err);
-                            resolve(empty);
-                        });
+            res.json()
+                .then(res => {
+                    resolve({
+                        buckets: res.buckets || [],
+                        links: res.links || []
+                    });
+                })
+                .catch(err => {
+                    console.log(err);
+                    resolve(empty);
                 });
-            })
-            .catch(err => {
-                console.log(err);
-                return empty;
-            });
         });
+    })
+    .catch(err => {
+        console.log(err);
+        return empty;
+    });
 }
 
 
@@ -415,33 +526,29 @@ function bookmark_url(info) {
     formData.append('description', info.description);
     formData.append('is_favorite', info.is_favorite === 'Y' ? 'Y' : 'N');
 
-    return chrome.storage.local.get('token')
-        .then(res => {
-            return fetch('https://app.fullsort.com/api/link', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + res.token
-                }
-            })
-            .then(res => {
-                return new Promise(resolve => {
-                    res.json()
-                        .then(res => {
-                            resolve(res);
-                        })
-                        .catch(err => {
-                            console.log(err);
-                            resolve(connection_error());
-                        });
+    return authenticated_fetch('https://app.fullsort.com/api/link', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(res => {
+        return new Promise(resolve => {
+            res.json()
+                .then(res => {
+                    resolve(res);
+                })
+                .catch(err => {
+                    console.log(err);
+                    resolve(connection_error());
                 });
-            })
-            .catch(err => {
-                console.log(err);
-                return connection_error();
-            });
         });
+    })
+    .catch(err => {
+        console.log(err);
+        return connection_error();
+    });
 }
 
 
@@ -463,33 +570,29 @@ function save_bucket(info) {
     formData.append('name', info.name);
     formData.append('description', info.description);
 
-    return chrome.storage.local.get('token')
-        .then(res => {
-            return fetch('https://app.fullsort.com/api/bucket', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + res.token
-                }
-            })
-            .then(res => {
-                return new Promise(resolve => {
-                    res.json()
-                        .then(res => {
-                            resolve(res);
-                        })
-                        .catch(err => {
-                            console.log(err);
-                            resolve(connection_error());
-                        });
+    return authenticated_fetch('https://app.fullsort.com/api/bucket', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(res => {
+        return new Promise(resolve => {
+            res.json()
+                .then(res => {
+                    resolve(res);
+                })
+                .catch(err => {
+                    console.log(err);
+                    resolve(connection_error());
                 });
-            })
-            .catch(err => {
-                console.log(err);
-                return connection_error();
-            });
         });
+    })
+    .catch(err => {
+        console.log(err);
+        return connection_error();
+    });
 }
 
 
@@ -509,18 +612,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             .then(res => sendResponse(res))
             .catch(err => { console.log(err); sendResponse('fail'); });
     } else if (request.message === 're-auth') {
-        // Validate stored token
+        // Validate stored token, silently re-authenticating with cached
+        // credentials if it's expired (see silent_reauth above)
         validate_token()
             .then(res => {
                 if (res === 'invalid') {
-                    // Get stored credentials
-                    get_stored_credentials('user_info')
-                        .then(res => {
-                            // Login using stored credentials
-                            sign_in(res)
-                                .then(result => sendResponse(result))
-                                .catch(err => { console.log(err); sendResponse('fail'); });
-                        })
+                    silent_reauth()
+                        .then(result => sendResponse(result))
                         .catch(err => { console.log(err); sendResponse('fail'); });
                 } else {
                     sendResponse('success');
