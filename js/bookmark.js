@@ -643,6 +643,25 @@ add_button.addEventListener("click", function() {
                 heading.className = 'success';
                 heading.textContent = 'Bookmark Added!';
                 container.appendChild(heading);
+
+                // Give the user a clear way back to the main screen instead
+                // of leaving them on this confirmation view with a hidden
+                // form and no next step.
+                const back_button = document.createElement('button');
+                back_button.type = 'button';
+                back_button.id = 'back_to_bookmark';
+                back_button.className = 'btn btn-info btn-sm mt-2';
+
+                const back_icon = document.createElement('i');
+                back_icon.className = 'fa fa-arrow-left mr-1';
+                back_button.appendChild(back_icon);
+                back_button.appendChild(document.createTextNode('Add Another Bookmark'));
+
+                back_button.addEventListener('click', function() {
+                    window.location.reload();
+                });
+
+                container.appendChild(back_button);
                 container.style.display = "block";
             } else {
                 render_errors(response.errors);
