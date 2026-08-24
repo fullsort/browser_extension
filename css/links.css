@@ -139,6 +139,10 @@ m-0 {
     text-align: right;
 }
 
+.text-center {
+    text-align: center;
+}
+
 .align-bottom {
     vertical-align: bottom;
 }
