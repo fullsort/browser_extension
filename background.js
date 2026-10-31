@@ -28,8 +28,16 @@ function logout() {
  * Authenticate user using provided credentials
  *      On success, store credentials and token in chrome local storage
  *
- * @param {type} user_info
- * @returns {Promise}
+ *      If the account has Extra Security (two-step) turned on, the API
+ *      rejects a login with no `code` field with a 401 and a `code`
+ *      validation error ("Two-step code required"). We tell that apart
+ *      from a code that was sent but rejected by whether this request
+ *      already included one, so the popup knows whether to prompt for a
+ *      code for the first time or tell the user the one they entered was
+ *      wrong.
+ *
+ * @param {type} user_info email, pass, and optionally an Extra Security code
+ * @returns {Promise<String>} 'success', 'code-required', 'invalid-code', or 'fail'
  */
 function sign_in(user_info) {
     const formData = new FormData();
@@ -43,6 +51,11 @@ function sign_in(user_info) {
     formData.append('email', user_info.email);
     formData.append('password', user_info.pass);
 
+    const has_code = !!(user_info.hasOwnProperty('code') && user_info.code);
+    if (has_code) {
+        formData.append('code', user_info.code);
+    }
+
     return fetch('https://app.fullsort.com/api/auth/login', {
         method: 'POST',
         body: formData,
@@ -52,20 +65,34 @@ function sign_in(user_info) {
     })
     .then(res => {
         return new Promise(resolve => {
-            if (res.status !== 200) {
-                resolve('fail');
+            if (res.status === 200) {
+                res.json()
+                    .then(function(data) {
+                        // Never persist the Extra Security code - it's a
+                        // single-use code, so silent_reauth() re-signing in
+                        // later with the cached user_info must not resend it.
+                        chrome.storage.local.set({ 'user_info': { email: user_info.email, pass: user_info.pass }, 'token': data.token }, function (response) {
+                            if (chrome.runtime.lastError) {
+                                resolve('fail');
+                                return;
+                            }
+                            resolve('success');
+                        });
+                    })
+                    .catch(function(reason) {
+                        console.log(reason);
+                        resolve('fail');
+                    });
                 return;
             }
 
             res.json()
                 .then(function(data) {
-                    chrome.storage.local.set({ 'user_info': user_info, 'token': data.token }, function (response) {
-                        if (chrome.runtime.lastError) {
-                            resolve('fail');
-                            return;
-                        }
-                        resolve('success');
-                    });
+                    if (data && data.code) {
+                        resolve(has_code ? 'invalid-code' : 'code-required');
+                        return;
+                    }
+                    resolve('fail');
                 })
                 .catch(function(reason) {
                     console.log(reason);
